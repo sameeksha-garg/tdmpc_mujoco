@@ -5,7 +5,7 @@ import numpy as np
 from dm_control import suite
 from dm_control.suite.wrappers import action_scale, pixels
 from dm_env import StepType, specs
-import gym
+
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning) 
 
@@ -168,7 +168,39 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
 
 	def __getattr__(self, name):
 		return getattr(self._env, name)
+	
+class NormalizeAction(gym.ActionWrapper):
+    """
+    Expose a [-1, 1] Box action space to the agent, rescaling into the true
+    action bounds of the underlying Gym/MuJoCo env.
+    """
+    def __init__(self, env):
+        super().__init__(env)
+        assert isinstance(env.action_space, gym.spaces.Box)
+        self._low = env.action_space.low
+        self._high = env.action_space.high
+        self.action_space = gym.spaces.Box(
+            low=-np.ones_like(self._low),
+            high=np.ones_like(self._high),
+            dtype=np.float32,
+        )
 
+    def action(self, action):
+        action = np.clip(action, -1.0, 1.0)
+        scaled = self._low + 0.5 * (action + 1.0) * (self._high - self._low)
+        return scaled.astype(np.float32)
+
+
+class Float32Obs(gym.ObservationWrapper):
+    """
+    Ensure observations are float32 numpy arrays.
+    """
+    def __init__(self, env):
+        super().__init__(env)
+        self.observation_space = env.observation_space
+
+    def observation(self, obs):
+        return np.asarray(obs, dtype=np.float32)
 
 class TimeStepToGymWrapper(object):
 	def __init__(self, env, domain, task, action_repeat, modality):
@@ -252,36 +284,67 @@ class DefaultDictWrapper(gym.Wrapper):
 
 
 def make_env(cfg):
-	"""
-	Make DMControl environment for TD-MPC experiments.
-	Adapted from https://github.com/facebookresearch/drqv2
-	"""
-	domain, task = cfg.task.replace('-', '_').split('_', 1)
-	domain = dict(cup='ball_in_cup').get(domain, domain)
-	assert (domain, task) in suite.ALL_TASKS
-	env = suite.load(domain,
-					 task,
-					 task_kwargs={'random': cfg.seed},
-					 visualize_reward=False)
-	env = ActionDTypeWrapper(env, np.float32)
-	env = ActionRepeatWrapper(env, cfg.action_repeat)
-	env = action_scale.Wrapper(env, minimum=-1.0, maximum=+1.0)
+    """
+    Make environment for TD-MPC experiments.
 
-	if cfg.modality=='pixels':
-		if (domain, task) in suite.ALL_TASKS:
-			camera_id = dict(quadruped=2).get(domain, 0)
-			render_kwargs = dict(height=84, width=84, camera_id=camera_id)
-			env = pixels.Wrapper(env,
-								pixels_only=True,
-								render_kwargs=render_kwargs)
-		env = FrameStackWrapper(env, cfg.get('frame_stack', 1), cfg.modality)
-	env = ExtendedTimeStepWrapper(env)
-	env = TimeStepToGymWrapper(env, domain, task, cfg.action_repeat, cfg.modality)
-	env = DefaultDictWrapper(env)
+    - If cfg.task is a DMControl task, build a DMControl env (original behavior).
+    - Otherwise, treat cfg.task as a gym env id (e.g. 'HalfCheetah-v2',
+      'Humanoid-v2', etc.) and build a Gym/MuJoCo env.
+    """
 
-	# Convenience
-	cfg.obs_shape = tuple(int(x) for x in env.observation_space.shape)
-	cfg.action_shape = tuple(int(x) for x in env.action_space.shape)
-	cfg.action_dim = env.action_space.shape[0]
+    # -------- Try to interpret as DMControl --------
+    is_dmc = False
+    domain = task = None
 
-	return env
+    # DMControl tasks are of the form 'domain-task' in your configs
+    # e.g. 'cheetah-run' -> ('cheetah', 'run')
+    parts = cfg.task.replace('-', '_').split('_', 1)
+    if len(parts) == 2:
+        domain, task = parts
+        domain = dict(cup='ball_in_cup').get(domain, domain)
+        if (domain, task) in suite.ALL_TASKS:
+            is_dmc = True
+
+    if is_dmc:
+        env = suite.load(
+            domain,
+            task,
+            task_kwargs={'random': cfg.seed},
+            visualize_reward=False,
+        )
+        env = ActionDTypeWrapper(env, np.float32)
+        env = ActionRepeatWrapper(env, cfg.action_repeat)
+        env = action_scale.Wrapper(env, minimum=-1.0, maximum=+1.0)
+
+        if cfg.modality == 'pixels':
+            if (domain, task) in suite.ALL_TASKS:
+                camera_id = dict(quadruped=2).get(domain, 0)
+                render_kwargs = dict(height=84, width=84, camera_id=camera_id)
+                env = pixels.Wrapper(
+                    env,
+                    pixels_only=True,
+                    render_kwargs=render_kwargs,
+                )
+            env = FrameStackWrapper(env, cfg.get('frame_stack', 1), cfg.modality)
+
+        env = ExtendedTimeStepWrapper(env)
+        env = TimeStepToGymWrapper(env, domain, task, cfg.action_repeat, cfg.modality)
+        env = DefaultDictWrapper(env)
+
+    else:
+        assert cfg.modality != 'pixels', \
+            "Gym/MuJoCo path currently only supports state observations."
+
+        env = gym.make(cfg.task)
+
+        env = Float32Obs(env)
+        env = NormalizeAction(env)
+        env = DefaultDictWrapper(env)
+
+    # convenience
+    cfg.obs_shape = tuple(int(x) for x in env.observation_space.shape)
+    cfg.action_shape = tuple(int(x) for x in env.action_space.shape)
+    cfg.action_dim = env.action_space.shape[0]
+
+    return env
+
