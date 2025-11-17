@@ -1,16 +1,17 @@
 name: tdmpc
 channels:
+  - conda-forge
   - defaults
 dependencies:
   - python=3.8
   - pytorch=1.9
   - torchvision
   - cudatoolkit=11.1
+  - gym==0.21.0          # <-- from conda, not pip
   - pip
   - pip:
     - termcolor
     - omegaconf
-    - gym==0.21.0
     - dm-control==0.0.403778684
     - pandas
     - wandb
