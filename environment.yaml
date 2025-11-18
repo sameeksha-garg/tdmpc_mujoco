@@ -2,18 +2,24 @@ name: tdmpc
 channels:
   - conda-forge
   - defaults
+
 dependencies:
-  - python=3.8
-  - pytorch=1.9
-  - torchvision
-  - cudatoolkit=11.1
-  - gym==0.21.0          # <-- from conda, not pip
+  - python=3.11
   - pip
+  - numpy
+  - scipy
+  - pillow
+  - matplotlib
+  - tqdm
+
   - pip:
-    - termcolor
-    - omegaconf
-    - dm-control==0.0.403778684
-    - pandas
-    - wandb
-    - moviepy
-    - imageio
+      - torch==2.3.0
+      - torchvision==0.18.0
+      - torchaudio==2.3.0
+      - "gymnasium[mujoco]"
+      - mujoco
+      - pyyaml
+      - absl-py
+      - imageio
+      - imageio-ffmpeg
+      - wandb
