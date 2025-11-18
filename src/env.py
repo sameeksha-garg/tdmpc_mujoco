@@ -48,7 +48,8 @@ class DefaultDictWrapper(gym.Wrapper):
 		gym.Wrapper.__init__(self, env)
 
 	def step(self, action):
-		obs, reward, done, info = self.env.step(action)
+		obs, reward, terminated, truncated, info = self.env.step(action)
+		done = terminated or truncated
 		return obs, reward, done, defaultdict(float, info)
 
 

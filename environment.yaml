@@ -11,6 +11,7 @@ dependencies:
   - pillow
   - matplotlib
   - tqdm
+  - pandas
 
   - pip:
       - torch==2.3.0
@@ -18,8 +19,11 @@ dependencies:
       - torchaudio==2.3.0
       - "gymnasium[mujoco]"
       - mujoco
+      - omegaconf
       - pyyaml
+      - termcolor
       - absl-py
       - imageio
       - imageio-ffmpeg
+      - moviepy
       - wandb

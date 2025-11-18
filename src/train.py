@@ -6,7 +6,8 @@ os.environ['MUJOCO_GL'] = 'egl'
 import torch
 import numpy as np
 import gymnasium as gym
-gym.logger.set_level(40)
+import logging
+logging.getLogger("gymnasium").setLevel(logging.INFO)
 import time
 import random
 from pathlib import Path
@@ -30,7 +31,8 @@ def evaluate(env, agent, num_episodes, step, env_step, video):
 	"""Evaluate a trained agent and optionally save a video."""
 	episode_rewards = []
 	for i in range(num_episodes):
-		obs, done, ep_reward, t = env.reset(), False, 0, 0
+		obs, _ = env.reset() # <-- CHANGED: Unpack (obs, info) tuple
+		done, ep_reward, t = False, 0, 0
 		if video: video.init(env, enabled=(i==0))
 		while not done:
 			action = agent.plan(obs, eval_mode=True, step=step, t0=t==0)
@@ -44,7 +46,17 @@ def evaluate(env, agent, num_episodes, step, env_step, video):
 
 
 def train(cfg):
+	print("\n================= DEBUG =================", flush=True)
+	print("train() entered", flush=True)
+	print(f"cwd = {Path().cwd()}", flush=True)
+	print(f"task = {cfg.task}", flush=True)
+	print(f"modality = {cfg.modality}", flush=True)
+	print(f"seed = {cfg.seed}", flush=True)
+	print("About to initialize environment...", flush=True)
+	print("=========================================\n", flush=True)
+		
 	"""Training script for TD-MPC. Requires a CUDA-enabled device."""
+  
 	assert torch.cuda.is_available()
 	set_seed(cfg.seed)
 	work_dir = Path().cwd() / __LOGS__ / cfg.task / cfg.modality / cfg.exp_name / str(cfg.seed)
@@ -56,8 +68,8 @@ def train(cfg):
 	for step in range(0, cfg.train_steps+cfg.episode_length, cfg.episode_length):
 
 		# Collect trajectory
-		obs = env.reset()
-		episode = Episode(cfg, obs)
+		obs, _ = env.reset() # <-- CHANGED: Unpack (obs, info) tuple
+		episode = Episode(cfg, obs) # Now 'obs' is the array, not the tuple
 		while not episode.done:
 			action = agent.plan(obs, step=step, t0=episode.first)
 			obs, reward, done, _ = env.step(action.cpu().numpy())
