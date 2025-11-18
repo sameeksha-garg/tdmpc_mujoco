@@ -1,0 +1,14 @@
+task: Reacher-v4
+modality: state
+
+exp_name: mujoco_reacher_v4
+seed: 1    
+
+episode_length: 50
+action_repeat: 1
+
+train_steps: 500000
+seed_steps: 5000
+
+eval_freq: 10000
+eval_episodes: 10
