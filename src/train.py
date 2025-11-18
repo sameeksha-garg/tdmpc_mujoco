@@ -5,7 +5,7 @@ os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
 os.environ['MUJOCO_GL'] = 'egl'
 import torch
 import numpy as np
-import gym
+import gymnasium as gym
 gym.logger.set_level(40)
 import time
 import random
